@@ -4,7 +4,7 @@ import sqlite3
 import hashlib
 from datetime import datetime, timedelta
 
-# 1. הגדרות דף ועיצוב מותאם אישית (Custom CSS)
+# 1. הגדרות דף ועיצוב מותאם אישית (Custom CSS) - גרסה מתוקנת
 st.set_page_config(page_title="LabInventory Pro", layout="wide", initial_sidebar_state="expanded")
 
 custom_css = """
@@ -13,6 +13,19 @@ custom_css = """
     .stApp {
         background-color: #0f172a;
         color: #f8fafc;
+    }
+    
+    /* תיקון ה-Expander (בקשה חדשה) שלא יהיה לבן */
+    div[data-testid="stExpander"], .stExpander {
+        background-color: #1e293b !important;
+        border: 1px solid #334155 !important;
+        border-radius: 12px !important;
+    }
+    
+    /* תיקון הטקסט בתוך ה-Expander */
+    div[data-testid="stExpander"] summary p, .stExpander summary {
+        color: #2dd4bf !important; /* צבע טורקיז לכותרת */
+        font-weight: bold !important;
     }
     
     /* עיצוב כרטיסי פריטים */
@@ -80,6 +93,11 @@ custom_css = """
         background-color: #14b8a6;
         color: #ffffff;
     }
+    
+    /* תיקון צבע הטקסט בתוך תיבות קלט */
+    .stTextInput input, .stSelectbox div, .stNumberInput input {
+        color: #f8fafc !important;
+    }
 </style>
 """
 st.markdown(custom_css, unsafe_allow_html=True)
@@ -91,7 +109,6 @@ def check_hashes(password, hashed_text): return make_hashes(password) == hashed_
 conn = sqlite3.connect("lab_storage_pro.db", check_same_thread=False)
 cursor = conn.cursor()
 
-# יצירת טבלאות
 cursor.execute('''CREATE TABLE IF NOT EXISTS inventory (
     id INTEGER PRIMARY KEY AUTOINCREMENT, item_name TEXT, catalog_number TEXT, 
     vendor TEXT, category TEXT, location TEXT, quantity INTEGER, 
@@ -102,7 +119,6 @@ cursor.execute('''CREATE TABLE IF NOT EXISTS orders (
 cursor.execute('CREATE TABLE IF NOT EXISTS users (username TEXT PRIMARY KEY, password TEXT)')
 conn.commit()
 
-# יצירת אדמין אם לא קיים
 cursor.execute('SELECT * FROM users WHERE username = ?', ("admin",))
 if not cursor.fetchone():
     cursor.execute('INSERT INTO users (username, password) VALUES (?, ?)', ("admin", make_hashes("lab2026")))
@@ -207,16 +223,19 @@ else:
         with st.expander("➕ בקשה חדשה"):
             with st.form("o_form"):
                 oname = st.text_input("שם חומר:")
-                ouser = st.text_input("חוקר מזמין:")
-                oqty = st.number_input("כמות:", min_value=1)
-                if st.form_submit_button("שלח"):
+                ouser = st.text_input("שם החוקר המזמין:")
+                oqty = st.number_input("כמות מבוקשת:", min_value=1)
+                if st.form_submit_button("שלח בקשה"):
                     cursor.execute("INSERT INTO orders (item_name, requested_by, quantity, status, date_requested) VALUES (?,?,?,'ממתין',?)", 
                                    (oname, ouser, oqty, datetime.today().strftime('%Y-%m-%d')))
                     conn.commit()
-                    st.success("נשלח!")
+                    st.success("בקשת ההזמנה נשלחה!")
                     st.rerun()
+        
+        st.markdown("### לוח מעקב הזמנות")
         df_o = pd.read_sql_query("SELECT * FROM orders", conn)
         if not df_o.empty: st.dataframe(df_o, use_container_width=True, hide_index=True)
+        else: st.info("אין הזמנות פתוחות.")
 
     # --- לשונית דאשבורד ---
     with tab_dash:
