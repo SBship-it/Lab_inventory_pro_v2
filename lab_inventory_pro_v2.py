@@ -4,7 +4,7 @@ import sqlite3
 import hashlib
 from datetime import datetime, timedelta
 
-# 1. הגדרות דף ועיצוב מותאם אישית (Custom CSS) למראה יוקרתי
+# 1. הגדרות דף ועיצוב מותאם אישית (Custom CSS)
 st.set_page_config(page_title="LabInventory Pro", layout="wide", initial_sidebar_state="expanded")
 
 custom_css = """
@@ -13,6 +13,13 @@ custom_css = """
     .stApp {
         background-color: #0f172a;
         color: #f8fafc;
+    }
+    
+    /* תיקון נראות תוויות (Labels) מעל תיבות הקלט - צבע אפור בהיר וברור */
+    label, .stMarkdown p, .stText, [data-testid="stMarkdownContainer"] p, .stSelectbox label, .stTextInput label, .stNumberInput label {
+        color: #cbd5e1 !important;
+        font-weight: 500 !important;
+        font-size: 1rem !important;
     }
     
     /* עיצוב כותרות */
@@ -69,47 +76,22 @@ custom_css = """
         color: #2dd4bf !important;
         border: 1px solid #2dd4bf !important;
     }
-    
-    /* עיצוב שורות מלאי נמוך */
-    .low-stock-row {
-        background-color: #4a0e0e !important; /* כהה יותר, אדום עמוק */
-        color: #ffcccc !important;
-    }
-    
-    /* עיצוב שורות פג תוקף */
-    .expired-row {
-        background-color: #6b21a8 !important; /* סגול כהה */
-        color: #e9d5ff !important;
-    }
-    
-    /* עיצוב שורות קרוב לתפוגה */
-    .expiring-soon-row {
-        background-color: #854d0e !important; /* כתום כהה */
-        color: #fde68a !important;
-    }
 </style>
 """
 st.markdown(custom_css, unsafe_allow_html=True)
 
-# 2. פונקציות אבטחה והצפנת סיסמאות
+# 2. פונקציות אבטחה
 def make_hashes(password):
     return hashlib.sha256(str.encode(password)).hexdigest()
 
 def check_hashes(password, hashed_text):
-    if make_hashes(password) == hashed_text:
-        return True
-    return False
+    return make_hashes(password) == hashed_text
 
-# 3. חיבור לבסיס הנתונים (שומר את המידע לצמיתות בקובץ מקומי)
+# 3. חיבור לבסיס הנתונים
 conn = sqlite3.connect("lab_storage_pro.db", check_same_thread=False)
 cursor = conn.cursor()
 
-# יצירת טבלאות (מלאי, הזמנות, משתמשים ומצב מנוי)
-# עדכון טבלת inventory עם min_quantity כ-INTEGER ו-expiry_date
-cursor.execute("PRAGMA table_info(inventory)")
-columns = [col[1] for col in cursor.fetchall()]
-
-# יצירת טבלאות (מלאי, הזמנות, משתמשים)
+# יצירת טבלאות בצורה בטוחה ויציבה
 cursor.execute('''
     CREATE TABLE IF NOT EXISTS inventory (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -128,43 +110,23 @@ cursor.execute('''
 cursor.execute('CREATE TABLE IF NOT EXISTS users (username TEXT PRIMARY KEY, password TEXT, account_status TEXT)')
 conn.commit()
 
-
-cursor.execute('''
-    CREATE TABLE IF NOT EXISTS inventory (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        item_name TEXT, catalog_number TEXT, vendor TEXT,
-        category TEXT, location TEXT, quantity INTEGER, unit TEXT, min_quantity INTEGER, expiry_date TEXT
-    )
-''')
-cursor.execute('''
-    CREATE TABLE IF NOT EXISTS orders (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        item_name TEXT, catalog_number TEXT, vendor TEXT,
-        requested_by TEXT, quantity INTEGER, status TEXT, date_requested TEXT
-    )
-''')
-cursor.execute('CREATE TABLE IF NOT EXISTS users (username TEXT PRIMARY KEY, password TEXT, account_status TEXT)')
-conn.commit()
-
-# יצירת משתמש מנהל ברירת מחדל לבדיקה (שם משתמש: admin, סיסמה: lab2026)
-# יצירת משתמש מנהל ברירת מחדל אם הוא לא קיים
+# יצירת משתמש מנהל אם לא קיים (מונע שגיאות כפילות)
 cursor.execute('SELECT * FROM users WHERE username = ?', ("admin",))
 if not cursor.fetchone():
     cursor.execute('INSERT INTO users (username, password, account_status) VALUES (?, ?, ?)', 
                    ("admin", make_hashes("lab2026"), "active"))
     conn.commit()
 
-
-# 4. מנגנון ניהול סשן (Session State)
+# 4. ניהול סשן
 if 'logged_in' not in st.session_state:
     st.session_state['logged_in'] = False
 if 'username' not in st.session_state:
     st.session_state['username'] = ""
 
-# --- מסך התחברות מאובטח ---
+# --- מסך התחברות ---
 if not st.session_state['logged_in']:
     st.title("🧪 LabInventory Pro")
-    st.subheader("מערכת ניהול מלאי והזמנות מעבדה ברמה ארגונית")
+    st.subheader("מערכת ניהול מלאי והזמנות מעבדה")
     
     col_login, _ = st.columns([1, 1])
     with col_login:
@@ -175,7 +137,7 @@ if not st.session_state['logged_in']:
             login_btn = st.form_submit_button("התחבר למערכת")
             
             if login_btn:
-                cursor.execute('SELECT password, account_status FROM users WHERE username = ?', (user,))
+                cursor.execute('SELECT password FROM users WHERE username = ?', (user,))
                 user_data = cursor.fetchone()
                 if user_data and check_hashes(passwd, user_data[0]):
                     st.session_state['logged_in'] = True
@@ -183,263 +145,117 @@ if not st.session_state['logged_in']:
                     st.rerun()
                 else:
                     st.error("שם משתמש או סיסמה שגויים")
-                    
-    st.markdown("---")
-    st.info("💡 משתמש בדיקה מובנה במערכת: שם משתמש `admin` | סיסמה `lab2026`")
+    st.info("💡 משתמש בדיקה: `admin` | סיסמה `lab2026`")
 
-# --- המערכת המרכזית (לאחר התחברות) ---
+# --- המערכת המרכזית ---
 else:
-    # סרגל צדי (Sidebar) לפרופיל והתנתקות
     st.sidebar.markdown(f"### 👋 שלום, {st.session_state['username']}")
-    
-    # סימולציה של בדיקת סטטוס מנוי (כאן יתחבר הקישור ל-Stripe בעתיד)
-    cursor.execute('SELECT account_status FROM users WHERE username = ?', (st.session_state['username'],))
-    account_status = cursor.fetchone()[0]
-    
-    st.sidebar.markdown(f"**סטטוס חשבון:** המנוי פעיל 👑" if account_status == "active" else "**סטטוס חשבון:** גרסה חינמית")
-    
-    if st.sidebar.button("🚪 התנתק מהמערכת", use_container_width=True):
+    if st.sidebar.button("🚪 התנתק", use_container_width=True):
         st.session_state['logged_in'] = False
         st.session_state['username'] = ""
         st.rerun()
 
-    # כותרת האפליקציה
-    st.title("🧪 LabInventory Pro - מרכז ניהול מעבדה")
+    st.title("🧪 LabInventory Pro - מרכז ניהול")
     st.markdown("---")
     
-    # חלוקה ללשוניות מעוצבות
-    tab_inv, tab_add, tab_orders, tab_dashboard = st.tabs(["📦 מלאי המחסן והמעבדה", "➕ הוספת פריט חדש למלאי", "🛒 עגלת הזמנות ומעקב", "📊 דאשבורד וסטטיסטיקות"])
+    tab_inv, tab_add, tab_orders, tab_dashboard = st.tabs(["📦 מלאי", "➕ הוספה", "🛒 הזמנות", "📊 דאשבורד"])
     
-    # ----------------- לשונית 1: מלאי המחסן -----------------
     with tab_inv:
-        st.subheader("חיפוש וניהול פריטים במלאי")
-        
-        # שליפת המידע מבסיס הנתונים
+        st.subheader("חיפוש וניהול פריטים")
         df_inv = pd.read_sql_query("SELECT * FROM inventory", conn)
         
         if df_inv.empty:
-            st.info("המחסן ריק כרגע. עברי ללשונית 'הוספת פריט חדש' כדי להזין את הציוד הראשון.")
+            st.info("המחסן ריק כרגע.")
         else:
-            # הוספת עמודות סטטוס למלאי
             df_inv['status'] = 'רגיל'
             today = datetime.now().date()
+            df_inv['expiry_date_dt'] = pd.to_datetime(df_inv['expiry_date'], errors='coerce').dt.date
             
-            # בדיקת תאריכי תפוגה
-            df_inv['expiry_date'] = pd.to_datetime(df_inv['expiry_date'], errors='coerce')
-            df_inv.loc[df_inv['expiry_date'].notna() & (df_inv['expiry_date'].dt.date < today), 'status'] = 'פג תוקף'
-            df_inv.loc[df_inv['expiry_date'].notna() & (df_inv['expiry_date'].dt.date >= today) & (df_inv['expiry_date'].dt.date < today + timedelta(days=30)), 'status'] = 'קרוב לתפוגה'
-            
-            # בדיקת מלאי נמוך (רק לפריטים שאינם פגי תוקף או קרובים לתפוגה)
+            df_inv.loc[df_inv['expiry_date_dt'].notna() & (df_inv['expiry_date_dt'] < today), 'status'] = 'פג תוקף'
+            df_inv.loc[df_inv['expiry_date_dt'].notna() & (df_inv['expiry_date_dt'] >= today) & (df_inv['expiry_date_dt'] < today + timedelta(days=30)), 'status'] = 'קרוב לתפוגה'
             df_inv.loc[(df_inv['quantity'] <= df_inv['min_quantity']) & (df_inv['status'] == 'רגיל'), 'status'] = 'מלאי נמוך'
 
-            # שורת חיפוש חכמה
-            col_search, col_filter, col_status_filter = st.columns([2, 1, 1])
-            with col_search:
-                search_query = st.text_input("🔍 חפש לפי שם חומר, נוגדן או מספר קטלוגי:")
-            with col_filter:
-                categories = ["הכל"] + list(df_inv["category"].unique())
-                selected_cat = st.selectbox("סנן לפי קטגוריה:", categories)
-            with col_status_filter:
-                statuses = ["הכל"] + list(df_inv["status"].unique())
-                selected_status = st.selectbox("סנן לפי סטטוס:", statuses)
+            col_s1, col_s2, col_s3 = st.columns([2, 1, 1])
+            search = col_s1.text_input("🔍 חפש לפי שם או קטלוג:")
+            cat_filter = col_s2.selectbox("סנן קטגוריה:", ["הכל"] + list(df_inv["category"].unique()))
+            stat_filter = col_s3.selectbox("סנן סטטוס:", ["הכל"] + list(df_inv["status"].unique()))
             
-            # סינון הנתונים בהתאם לחיפוש
-            filtered_df = df_inv.copy()
-            if search_query:
-                filtered_df = filtered_df[
-                    filtered_df["item_name"].str.contains(search_query, case=False, na=False) |
-                    filtered_df["catalog_number"].str.contains(search_query, case=False, na=False)
-                ]
-            if selected_cat != "הכל":
-                filtered_df = filtered_df[filtered_df["category"] == selected_cat]
-            if selected_status != "הכל":
-                filtered_df = filtered_df[filtered_df["status"] == selected_status]
+            filtered = df_inv.copy()
+            if search:
+                filtered = filtered[filtered["item_name"].str.contains(search, case=False, na=False) | filtered["catalog_number"].str.contains(search, case=False, na=False)]
+            if cat_filter != "הכל":
+                filtered = filtered[filtered["category"] == cat_filter]
+            if stat_filter != "הכל":
+                filtered = filtered[filtered["status"] == stat_filter]
             
-            # פונקציה לעיצוב שורות בטבלה
-            def highlight_rows(row):
-                if row['status'] == 'מלאי נמוך':
-                    return ['background-color: #4a0e0e; color: #ffcccc'] * len(row) # אדום כהה
-                elif row['status'] == 'פג תוקף':
-                    return ['background-color: #6b21a8; color: #e9d5ff'] * len(row) # סגול כהה
-                elif row['status'] == 'קרוב לתפוגה':
-                    return ['background-color: #854d0e; color: #fde68a'] * len(row) # כתום כהה
+            def highlight(row):
+                if row['status'] == 'מלאי נמוך': return ['background-color: #4a0e0e; color: #ffcccc'] * len(row)
+                if row['status'] == 'פג תוקף': return ['background-color: #6b21a8; color: #e9d5ff'] * len(row)
+                if row['status'] == 'קרוב לתפוגה': return ['background-color: #854d0e; color: #fde68a'] * len(row)
                 return [''] * len(row)
 
-            # הצגת טבלה בעיצוב נקי עם סטטוסים
-            st.dataframe(
-                filtered_df[["id", "item_name", "catalog_number", "vendor", "category", "location", "quantity", "unit", "min_quantity", "expiry_date", "status"]]
-                .style.apply(highlight_rows, axis=1),
-                use_container_width=True,
-                hide_index=True,
-                column_config={
-                    "expiry_date": st.column_config.DateColumn("תאריך תפוגה", format="YYYY-MM-DD"),
-                    "min_quantity": "כמות מינימלית",
-                    "status": "סטטוס"
-                }
-            )
+            st.dataframe(filtered[["id", "item_name", "catalog_number", "vendor", "category", "location", "quantity", "unit", "min_quantity", "expiry_date", "status"]].style.apply(highlight, axis=1), use_container_width=True, hide_index=True)
             
-            # כפתור ייצוא ל-CSV
-            csv_data = filtered_df.to_csv(index=False).encode('utf-8')
-            st.download_button(
-                label="⬇️ ייצוא מלאי ל-CSV",
-                data=csv_data,
-                file_name="lab_inventory.csv",
-                mime="text/csv",
-                use_container_width=True
-            )
-
-            # עדכון מהיר של כמויות (למשל כשחוקר לוקח בקבוק מהמקרר)
             st.markdown("### 🔄 עדכון כמות מהיר")
-            col_up_name, col_up_qty, col_up_btn = st.columns([2, 1, 1])
-            with col_up_name:
-                item_to_update = st.selectbox("בחר פריט לעדכון:", filtered_df["item_name"].unique())
-            with col_up_qty:
-                current_qty = df_inv[df_inv['item_name'] == item_to_update]['quantity'].iloc[0] if item_to_update else 0
-                new_qty = st.number_input("כמות מעודכנת במלאי:", min_value=0, value=int(current_qty), step=1)
-            with col_up_btn:
-                st.write("<br>", unsafe_allow_html=True)
-                if st.button("עדכן מלאי", use_container_width=True):
-                    cursor.execute("UPDATE inventory SET quantity = ? WHERE item_name = ?", (new_qty, item_to_update))
-                    conn.commit()
-                    st.success(f"הכמות עבור {item_to_update} עודכנה ל-{new_qty}")
-                    st.rerun()
+            col_u1, col_u2, col_u3 = st.columns([2, 1, 1])
+            item_up = col_u1.selectbox("בחר פריט לעדכון:", filtered["item_name"].unique() if not filtered.empty else [])
+            current_q = int(df_inv[df_inv['item_name']==item_up]['quantity'].iloc[0]) if item_up else 0
+            new_q = col_u2.number_input("כמות חדשה במלאי:", min_value=0, value=current_q)
+            if col_u3.button("עדכן מלאי", use_container_width=True):
+                cursor.execute("UPDATE inventory SET quantity = ? WHERE item_name = ?", (new_q, item_up))
+                conn.commit()
+                st.success(f"הכמות של {item_up} עודכנה!")
+                st.rerun()
 
-    # ----------------- לשונית 2: הוספת פריט -----------------
     with tab_add:
-        st.subheader("הוספת חומר או ציוד חדש למערכת")
-        
-        with st.form("add_item_form"):
-            col1, col2 = st.columns(2)
-            with col1:
-                item_name = st.text_input("שם הפריט / החומר (לדוגמה: Anti-GFP Antibody, Trizol):")
-                catalog_number = st.text_input("מספר קטלוגי (Cat No.):")
-                vendor = st.text_input("חברה / ספק (לדוגמה: Abcam, Thermo, Sigma):")
-            with col2:
-                category = st.selectbox("קטגוריה:", ["נוגדנים (Antibodies)", "קיטים (Kits)", "כימיקלים (Chemicals)", "תרביות תאים (Cell Culture)", "מתכלים ופלסטיקה", "אחר"])
-                location = st.text_input("מיקום מדויק (לדוגמה: Freezer -80C Rack A3, Shelf B2):")
-                col_q1, col_q2 = st.columns(2)
-                with col_q1:
-                    quantity = st.number_input("כמות התחלתית:", min_value=0, value=1)
-                with col_q2:
-                    unit = st.selectbox("יחידות:", ["בקבוקים", "מבחנות", "קופסאות", "אליקווטים", "מ\"ל"])
-                min_quantity = st.number_input("כמות מינימלית להתראה:", min_value=0, value=1)
-                expiry_date = st.date_input("תאריך תפוגה (אופציונלי):", value=None)
-            
-            submit_btn = st.form_submit_button("➕ הוסף למלאי המעבדה")
-            
-            if submit_btn:
-                if item_name:
-                    expiry_date_str = expiry_date.strftime('%Y-%m-%d') if expiry_date else None
-                    cursor.execute('''
-                        INSERT INTO inventory (item_name, catalog_number, vendor, category, location, quantity, unit, min_quantity, expiry_date)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ''', (item_name, catalog_number, vendor, category, location, quantity, unit, min_quantity, expiry_date_str))
+        st.subheader("הוספת פריט חדש")
+        with st.form("add_form"):
+            c1, c2 = st.columns(2)
+            name = c1.text_input("שם הפריט / החומר:")
+            cat_no = c1.text_input("מספר קטלוגי:")
+            vend = c1.text_input("חברה / ספק:")
+            cat = c2.selectbox("קטגוריה:", ["נוגדנים", "קיטים", "כימיקלים", "תרביות תאים", "מתכלים", "אחר"])
+            loc = c2.text_input("מיקום במעבדה:")
+            qty = c2.number_input("כמות התחלתית:", min_value=0, value=1)
+            min_q = c2.number_input("כמות מינימלית להתראה:", min_value=0, value=1)
+            exp = c2.date_input("תאריך תפוגה (אופציונלי):", value=None)
+            if st.form_submit_button("➕ הוסף למלאי"):
+                if name:
+                    exp_str = exp.strftime('%Y-%m-%d') if exp else None
+                    cursor.execute("INSERT INTO inventory (item_name, catalog_number, vendor, category, location, quantity, unit, min_quantity, expiry_date) VALUES (?,?,?,?,?,?,?,?,?)", (name, cat_no, vend, cat, loc, qty, "יחידות", min_q, exp_str))
                     conn.commit()
-                    st.success(f"החומר '{item_name}' נקלט בהצלחה בבסיס הנתונים!")
+                    st.success(f"הפריט {name} נוסף בהצלחה!")
                     st.rerun()
-                else:
-                    st.error("חובה להזין את שם החומר.")
+                else: st.error("חובה להזין שם פריט.")
 
-    # ----------------- לשונית 3: ניהול הזמנות -----------------
     with tab_orders:
-        st.subheader("📝 בקשות הזמנה ומעקב רכש")
-        
-        # טופס פנימי לחוקרים שרוצים לבקש חומר
-        with st.expander("➕ פתיחת בקשת הזמנה חדשה (עבור חוקרי המעבדה)"):
-            with st.form("order_form"):
-                o_name = st.text_input("שם החומר המבוקש:")
-                o_cat = st.text_input("מספר קטלוגי:")
-                o_vendor = st.text_input("חברה ספק:")
-                o_user = st.text_input("שם החוקר המזמין:")
-                o_qty = st.number_input("כמות מבוקשת:", min_value=1, value=1)
-                
-                order_submit = st.form_submit_button("שלח בקשת הזמנה לאישור מנהל")
-                if order_submit:
-                    if o_name and o_user:
-                        today_str = datetime.today().strftime('%Y-%m-%d')
-                        cursor.execute('''
-                            INSERT INTO orders (item_name, catalog_number, vendor, requested_by, quantity, status, date_requested)
-                            VALUES (?, ?, ?, ?, ?, 'ממתין לאישור', ?)
-                        ''', (o_name, o_cat, o_vendor, o_user, o_qty, today_str))
-                        conn.commit()
-                        st.success("בקשת ההזמנה נרשמה בהצלחה וממתינה לאישור רכש.")
-                        st.rerun()
-                    else:
-                        st.error("נא למלא שם חומר ושם חוקר.")
-
-        # הצגת רשימת ההזמנות הקיימות
-        st.markdown("### 📊 לוח מעקב הזמנות")
-        df_orders = pd.read_sql_query("SELECT * FROM orders", conn)
-        
-        if df_orders.empty:
-            st.info("אין בקשות הזמנה פתוחות כרגע.")
-        else:
-            st.dataframe(df_orders[["id", "item_name", "catalog_number", "vendor", "requested_by", "quantity", "status", "date_requested"]], use_container_width=True, hide_index=True)
-            
-            # כפתור ייצוא ל-CSV
-            csv_orders_data = df_orders.to_csv(index=False).encode('utf-8')
-            st.download_button(
-                label="⬇️ ייצוא הזמנות ל-CSV",
-                data=csv_orders_data,
-                file_name="lab_orders.csv",
-                mime="text/csv",
-                use_container_width=True
-            )
-
-            # שינוי סטטוס הזמנה על ידי מנהל המעבדה
-            st.markdown("### ⚙️ ניהול סטטוס (למנהלי מעבדה / רכש)")
-            col_o_id, col_o_stat, col_o_btn = st.columns([1, 1, 1])
-            with col_o_id:
-                selected_order_id = st.selectbox("בחר מספר הזמנה (ID):", df_orders["id"].unique())
-            with col_o_stat:
-                new_status = st.selectbox("עדכן סטטוס ל:", ["ממתין לאישור", "אושר והוזמן", "הגיע למעבדה - סגור"])
-            with col_o_btn:
-                st.write("<br>", unsafe_allow_html=True)
-                if st.button("עדכן סטטוס", use_container_width=True):
-                    cursor.execute("UPDATE orders SET status = ? WHERE id = ?", (new_status, selected_order_id))
+        st.subheader("📝 ניהול בקשות הזמנה")
+        with st.expander("➕ פתח בקשת הזמנה חדשה"):
+            with st.form("o_form"):
+                oname = st.text_input("שם החומר המבוקש:")
+                ouser = st.text_input("שם החוקר המזמין:")
+                oqty = st.number_input("כמות מבוקשת:", min_value=1)
+                if st.form_submit_button("שלח בקשה"):
+                    cursor.execute("INSERT INTO orders (item_name, requested_by, quantity, status, date_requested) VALUES (?,?,?,'ממתין',?)", (oname, ouser, oqty, datetime.today().strftime('%Y-%m-%d')))
                     conn.commit()
-                    st.success(f"הזמנה מספר {selected_order_id} עודכנה בהצלחה!")
+                    st.success("בקשת ההזמנה נשלחה!")
                     st.rerun()
+        
+        st.markdown("### לוח מעקב הזמנות")
+        df_o = pd.read_sql_query("SELECT * FROM orders", conn)
+        if not df_o.empty:
+            st.dataframe(df_o[["id", "item_name", "requested_by", "quantity", "status", "date_requested"]], use_container_width=True, hide_index=True)
+        else:
+            st.info("אין הזמנות פתוחות.")
 
-    # ----------------- לשונית 4: דאשבורד וסטטיסטיקות -----------------
     with tab_dashboard:
         st.subheader("📊 דאשבורד וסטטיסטיקות")
-        
-        df_inv_dashboard = pd.read_sql_query("SELECT * FROM inventory", conn)
-        
-        if df_inv_dashboard.empty:
-            st.info("אין נתונים להצגה בדאשבורד. אנא הוסף פריטים למלאי.")
-        else:
-            # גרף התפלגות מלאי לפי קטגוריה
-            st.markdown("### התפלגות פריטים לפי קטגוריה")
-            category_counts = df_inv_dashboard['category'].value_counts().reset_index()
-            category_counts.columns = ['Category', 'Count']
-            st.bar_chart(category_counts.set_index('Category'))
-
-            # גרף מלאי נמוך ופג תוקף
-            st.markdown("### סטטוס מלאי")
-            low_stock_count = df_inv_dashboard[df_inv_dashboard['quantity'] <= df_inv_dashboard['min_quantity']].shape[0]
-            expired_count = df_inv_dashboard[pd.to_datetime(df_inv_dashboard['expiry_date'], errors='coerce').dt.date < today].shape[0]
-            expiring_soon_count = df_inv_dashboard[(pd.to_datetime(df_inv_dashboard['expiry_date'], errors='coerce').dt.date >= today) & (pd.to_datetime(df_inv_dashboard['expiry_date'], errors='coerce').dt.date < today + timedelta(days=30))].shape[0]
-
-            status_data = pd.DataFrame({
-                'Status': ['מלאי נמוך', 'פג תוקף', 'קרוב לתפוגה', 'רגיל'],
-                'Count': [low_stock_count, expired_count, expiring_soon_count, df_inv_dashboard.shape[0] - low_stock_count - expired_count - expiring_soon_count]
-            })
-            st.bar_chart(status_data.set_index('Status'))
-
-            # טבלת פריטים במלאי נמוך
-            st.markdown("### פריטים במלאי נמוך")
-            low_stock_items = df_inv_dashboard[df_inv_dashboard['quantity'] <= df_inv_dashboard['min_quantity']]
-            if not low_stock_items.empty:
-                st.dataframe(low_stock_items[['item_name', 'quantity', 'min_quantity', 'category', 'location']], use_container_width=True, hide_index=True)
-            else:
-                st.info("אין פריטים במלאי נמוך כרגע.")
-
-            # טבלת פריטים פגי תוקף או קרובים לתפוגה
-            st.markdown("### פריטים פגי תוקף או קרובים לתפוגה")
-            expiring_items = df_inv_dashboard[(pd.to_datetime(df_inv_dashboard['expiry_date'], errors='coerce').dt.date < today + timedelta(days=30)) & (pd.to_datetime(df_inv_dashboard['expiry_date'], errors='coerce').notna())]
-            if not expiring_items.empty:
-                st.dataframe(expiring_items[['item_name', 'expiry_date', 'category', 'location']], use_container_width=True, hide_index=True)
-            else:
-                st.info("אין פריטים פגי תוקף או קרובים לתפוגה בקרוב.")
+        df_d = pd.read_sql_query("SELECT * FROM inventory", conn)
+        if not df_d.empty:
+            c1, c2, c3 = st.columns(3)
+            c1.metric("סה\"כ פריטים", len(df_d))
+            c2.metric("מלאי נמוך", len(df_d[df_d['quantity'] <= df_d['min_quantity']]))
+            c3.metric("פגי תוקף", len(df_d[pd.to_datetime(df_d['expiry_date'], errors='coerce').dt.date < datetime.now().date()]))
+            
+            st.markdown("### התפלגות לפי קטגוריות")
+            st.bar_chart(df_d['category'].value_counts())
