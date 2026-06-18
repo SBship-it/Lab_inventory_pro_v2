@@ -4,245 +4,179 @@ import sqlite3
 import hashlib
 from datetime import datetime, timedelta
 
-# 1. הגדרות דף ועיצוב מותאם אישית (Custom CSS) - גרסה מתוקנת
+# 1. הגדרות דף ועיצוב מותאם אישית
 st.set_page_config(page_title="LabInventory Pro", layout="wide", initial_sidebar_state="expanded")
 
 custom_css = """
 <style>
-    /* עיצוב רקע כללי */
-    .stApp {
-        background-color: #0f172a;
-        color: #f8fafc;
-    }
+    .stApp { background-color: #0f172a; color: #f8fafc; }
     
-    /* תיקון ה-Expander (בקשה חדשה) שלא יהיה לבן */
-    div[data-testid="stExpander"], .stExpander {
-        background-color: #1e293b !important;
-        border: 1px solid #334155 !important;
-        border-radius: 12px !important;
-    }
-    
-    /* תיקון הטקסט בתוך ה-Expander */
-    div[data-testid="stExpander"] summary p, .stExpander summary {
-        color: #2dd4bf !important; /* צבע טורקיז לכותרת */
-        font-weight: bold !important;
-    }
-    
-    /* עיצוב כרטיסי פריטים */
-    .inventory-card {
+    /* עיצוב ריבועי קטגוריות */
+    .category-card {
         background-color: #1e293b;
-        border-radius: 12px;
-        padding: 20px;
-        margin-bottom: 15px;
-        border: 1px solid #334155;
-        transition: transform 0.2s, border-color 0.2s;
+        border-radius: 15px;
+        padding: 30px;
+        text-align: center;
+        border: 2px solid #334155;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        margin-bottom: 20px;
     }
-    .inventory-card:hover {
-        transform: translateY(-3px);
+    .category-card:hover {
         border-color: #2dd4bf;
+        transform: scale(1.05);
+        background-color: #26334d;
+    }
+    .category-icon { font-size: 3rem; margin-bottom: 10px; }
+    .category-title { color: #2dd4bf; font-size: 1.5rem; font-weight: bold; }
+    
+    /* כרטיסי פריטים (בתוך קטגוריה) */
+    .item-card {
+        background: #1e293b;
+        border-radius: 10px;
+        padding: 15px;
+        border-right: 5px solid #2dd4bf;
+        margin-bottom: 10px;
     }
     
-    /* תגיות סטטוס */
-    .status-badge {
-        padding: 4px 10px;
-        border-radius: 20px;
-        font-size: 0.8rem;
-        font-weight: bold;
-        text-transform: uppercase;
-    }
-    .status-normal { background-color: #065f46; color: #34d399; }
-    .status-low { background-color: #7f1d1d; color: #fca5a5; }
-    .status-expired { background-color: #581c87; color: #d8b4fe; }
-    .status-soon { background-color: #78350f; color: #fcd34d; }
+    label, .stMarkdown p { color: #cbd5e1 !important; }
+    h1, h2, h3 { color: #2dd4bf !important; }
     
-    /* טקסטים ותוויות */
-    label, .stMarkdown p, .stText, [data-testid="stMarkdownContainer"] p {
-        color: #cbd5e1 !important;
-        font-weight: 500 !important;
-    }
-    h1, h2, h3 {
-        color: #2dd4bf !important;
-    }
-    
-    /* עיצוב הטאבים */
-    .stTabs [data-baseweb="tab-list"] {
-        background-color: #1e293b;
-        padding: 10px;
-        border-radius: 12px;
-        gap: 10px;
-    }
-    .stTabs [data-baseweb="tab"] {
-        color: #cbd5e1;
-        border-radius: 8px;
-        padding: 10px 20px;
-    }
-    .stTabs [aria-selected="true"] {
-        background-color: #2dd4bf !important;
-        color: #0f172a !important;
-    }
-
-    /* עיצוב כפתורים */
-    .stButton>button {
-        background-color: #2dd4bf;
-        color: #0f172a;
-        border-radius: 8px;
-        font-weight: bold;
-        border: none;
-    }
-    .stButton>button:hover {
-        background-color: #14b8a6;
-        color: #ffffff;
-    }
-    
-    /* תיקון צבע הטקסט בתוך תיבות קלט */
-    .stTextInput input, .stSelectbox div, .stNumberInput input {
-        color: #f8fafc !important;
-    }
+    .stTabs [data-baseweb="tab-list"] { background-color: #1e293b; border-radius: 12px; }
+    .stTabs [aria-selected="true"] { background-color: #2dd4bf !important; color: #0f172a !important; }
 </style>
 """
 st.markdown(custom_css, unsafe_allow_html=True)
 
-# 2. פונקציות עזר ובסיס נתונים
-def make_hashes(password): return hashlib.sha256(str.encode(password)).hexdigest()
-def check_hashes(password, hashed_text): return make_hashes(password) == hashed_text
-
+# 2. בסיס נתונים
 conn = sqlite3.connect("lab_storage_pro.db", check_same_thread=False)
 cursor = conn.cursor()
 
+# טבלאות
+cursor.execute('''CREATE TABLE IF NOT EXISTS categories (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, icon TEXT)''')
 cursor.execute('''CREATE TABLE IF NOT EXISTS inventory (
-    id INTEGER PRIMARY KEY AUTOINCREMENT, item_name TEXT, catalog_number TEXT, 
-    vendor TEXT, category TEXT, location TEXT, quantity INTEGER, 
-    unit TEXT, min_quantity INTEGER DEFAULT 1, expiry_date TEXT)''')
-cursor.execute('''CREATE TABLE IF NOT EXISTS orders (
-    id INTEGER PRIMARY KEY AUTOINCREMENT, item_name TEXT, requested_by TEXT, 
-    quantity INTEGER, status TEXT, date_requested TEXT)''')
-cursor.execute('CREATE TABLE IF NOT EXISTS users (username TEXT PRIMARY KEY, password TEXT)')
+    id INTEGER PRIMARY KEY AUTOINCREMENT, item_name TEXT, category TEXT, 
+    location TEXT, quantity INTEGER, expiry_date TEXT, catalog_number TEXT)''')
 conn.commit()
 
-cursor.execute('SELECT * FROM users WHERE username = ?', ("admin",))
-if not cursor.fetchone():
-    cursor.execute('INSERT INTO users (username, password) VALUES (?, ?)', ("admin", make_hashes("lab2026")))
+# הכנסת קטגוריות ברירת מחדל אם הטבלה ריקה
+cursor.execute("SELECT COUNT(*) FROM categories")
+if cursor.fetchone()[0] == 0:
+    defaults = [("נוגדנים", "🧬"), ("כימיקלים", "🧪"), ("מתכלים", "📦"), ("כללי", "🛠️")]
+    cursor.executemany("INSERT INTO categories (name, icon) VALUES (?, ?)", defaults)
     conn.commit()
 
-# 3. ניהול כניסה
-if 'logged_in' not in st.session_state: st.session_state['logged_in'] = False
+# 3. ניהול סשן לניווט
+if 'selected_category' not in st.session_state: st.session_state.selected_category = None
 
-if not st.session_state['logged_in']:
-    st.title("🧪 LabInventory Pro")
-    with st.form("login"):
-        user = st.text_input("שם משתמש")
-        passwd = st.text_input("סיסמה", type='password')
-        if st.form_submit_button("התחבר"):
-            cursor.execute('SELECT password FROM users WHERE username = ?', (user,))
-            data = cursor.fetchone()
-            if data and check_hashes(passwd, data[0]):
-                st.session_state['logged_in'] = True
-                st.rerun()
-            else: st.error("שם משתמש או סיסמה שגויים")
-else:
-    st.sidebar.markdown(f"### 👋 שלום, מנהל")
-    if st.sidebar.button("🚪 התנתק"):
-        st.session_state['logged_in'] = False
-        st.rerun()
+# --- ממשק ראשי ---
+st.title("🧪 LabInventory Pro - ניהול חכם")
 
-    st.title("🧪 LabInventory Pro - מרכז ניהול")
-    tab_inv, tab_add, tab_orders, tab_dash = st.tabs(["📦 מלאי", "➕ הוספה", "🛒 הזמנות", "📊 דאשבורד"])
+tab_manage, tab_dash = st.tabs(["🛒 ניהול והזמנות", "📊 דאשבורד"])
 
-    # --- לשונית מלאי (כרטיסים) ---
-    with tab_inv:
-        df = pd.read_sql_query("SELECT * FROM inventory", conn)
-        col_s1, col_s2 = st.columns([2, 1])
-        search = col_s1.text_input("🔍 חיפוש חופשי (שם או קטלוג):")
-        cat_filter = col_s2.selectbox("סנן קטגוריה:", ["הכל"] + list(df["category"].unique()) if not df.empty else ["הכל"])
+with tab_manage:
+    # כפתור חזרה אם אנחנו בתוך קטגוריה
+    if st.session_state.selected_category:
+        if st.button("⬅️ חזרה לכל הקטגוריות"):
+            st.session_state.selected_category = None
+            st.rerun()
+
+    # תצוגת קטגוריות (ריבועים)
+    if st.session_state.selected_category is None:
+        st.subheader("בחר קטגוריה לניהול:")
         
-        if not df.empty:
-            if search: df = df[df['item_name'].str.contains(search, case=False) | df['catalog_number'].str.contains(search, case=False)]
-            if cat_filter != "הכל": df = df[df['category'] == cat_filter]
-            
-            for _, row in df.iterrows():
-                status_class, status_text = "status-normal", "תקין"
-                today = datetime.now().date()
-                exp_date = pd.to_datetime(row['expiry_date']).date() if row['expiry_date'] else None
-                
-                if exp_date and exp_date < today: status_class, status_text = "status-expired", "פג תוקף"
-                elif exp_date and exp_date < today + timedelta(days=30): status_class, status_text = "status-soon", "פג בקרוב"
-                elif row['quantity'] <= row['min_quantity']: status_class, status_text = "status-low", "מלאי נמוך"
-                
+        # שליפת קטגוריות
+        df_cats = pd.read_sql_query("SELECT * FROM categories", conn)
+        cols = st.columns(3)
+        
+        for idx, row in df_cats.iterrows():
+            with cols[idx % 3]:
                 st.markdown(f"""
-                <div class="inventory-card">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <h3 style="margin: 0; color: #2dd4bf;">{row['item_name']}</h3>
-                        <span class="status-badge {status_class}">{status_text}</span>
-                    </div>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: 15px;">
-                        <div><small>📦 כמות:</small>  
-<b>{row['quantity']} {row['unit'] if row['unit'] else 'יחידות'}</b></div>
-                        <div><small>📍 מיקום:</small>  
-<b>{row['location']}</b></div>
-                        <div><small>🔖 קטלוג:</small>  
-<b>{row['catalog_number']}</b></div>
-                    </div>
-                    <div style="margin-top: 10px; font-size: 0.85rem; color: #94a3b8;">
-                        🏢 ספק: {row['vendor']} | 📅 תפוגה: {row['expiry_date'] if row['expiry_date'] else 'ללא'}
-                    </div>
+                <div class="category-card">
+                    <div class="category-icon">{row['icon']}</div>
+                    <div class="category-title">{row['name']}</div>
                 </div>
                 """, unsafe_allow_html=True)
-                with st.expander("🔄 עדכון מהיר"):
-                    new_q = st.number_input(f"עדכן כמות:", min_value=0, value=int(row['quantity']), key=f"q_{row['id']}")
-                    if st.button("שמור", key=f"btn_{row['id']}"):
-                        cursor.execute("UPDATE inventory SET quantity = ? WHERE id = ?", (new_q, row['id']))
-                        conn.commit()
-                        st.rerun()
-        else: st.info("המלאי ריק.")
-
-    # --- לשונית הוספה (מלאה) ---
-    with tab_add:
-        st.subheader("הוספת פריט חדש")
-        with st.form("add_form"):
-            c1, c2 = st.columns(2)
-            name = c1.text_input("שם הפריט:")
-            cat_no = c1.text_input("מספר קטלוגי:")
-            vend = c1.text_input("ספק:")
-            cat = c2.selectbox("קטגוריה:", ["נוגדנים", "כימיקלים", "קיטים", "מתכלים", "אחר"])
-            loc = c2.text_input("מיקום:")
-            qty = c2.number_input("כמות:", min_value=0, value=1)
-            min_q = c2.number_input("מינימום להתראה:", min_value=0, value=1)
-            exp = c2.date_input("תאריך תפוגה:", value=None)
-            if st.form_submit_button("➕ הוסף למלאי"):
-                if name:
-                    exp_s = exp.strftime('%Y-%m-%d') if exp else None
-                    cursor.execute("INSERT INTO inventory (item_name, catalog_number, vendor, category, location, quantity, min_quantity, expiry_date) VALUES (?,?,?,?,?,?,?,?)", 
-                                   (name, cat_no, vend, cat, loc, qty, min_q, exp_s))
-                    conn.commit()
-                    st.success("הפריט נוסף!")
-                    st.rerun()
-
-    # --- לשונית הזמנות ---
-    with tab_orders:
-        st.subheader("🛒 ניהול בקשות הזמנה")
-        with st.expander("➕ בקשה חדשה"):
-            with st.form("o_form"):
-                oname = st.text_input("שם חומר:")
-                ouser = st.text_input("שם החוקר המזמין:")
-                oqty = st.number_input("כמות מבוקשת:", min_value=1)
-                if st.form_submit_button("שלח בקשה"):
-                    cursor.execute("INSERT INTO orders (item_name, requested_by, quantity, status, date_requested) VALUES (?,?,?,'ממתין',?)", 
-                                   (oname, ouser, oqty, datetime.today().strftime('%Y-%m-%d')))
-                    conn.commit()
-                    st.success("בקשת ההזמנה נשלחה!")
+                if st.button(f"פתח את {row['name']}", key=f"cat_{row['id']}", use_container_width=True):
+                    st.session_state.selected_category = row['name']
                     st.rerun()
         
-        st.markdown("### לוח מעקב הזמנות")
-        df_o = pd.read_sql_query("SELECT * FROM orders", conn)
-        if not df_o.empty: st.dataframe(df_o, use_container_width=True, hide_index=True)
-        else: st.info("אין הזמנות פתוחות.")
-
-    # --- לשונית דאשבורד ---
-    with tab_dash:
-        st.subheader("📊 סטטיסטיקות")
-        df_d = pd.read_sql_query("SELECT * FROM inventory", conn)
-        if not df_d.empty:
+        st.markdown("---")
+        # הוספה/מחיקה של קטגוריות
+        with st.expander("⚙️ ניהול קטגוריות (הוספה/מחיקה)"):
             c1, c2 = st.columns(2)
-            c1.metric("סה\"כ פריטים", len(df_d))
-            c2.metric("מלאי נמוך", len(df_d[df_d['quantity'] <= df_d['min_quantity']]))
-            st.bar_chart(df_d['category'].value_counts())
+            new_cat = c1.text_input("שם קטגוריה חדשה:")
+            new_icon = c1.selectbox("אייקון:", ["🧬", "🧪", "📦", "🛠️", "🌡️", "🔍", "🧫"])
+            if c1.button("הוסף קטגוריה"):
+                try:
+                    cursor.execute("INSERT INTO categories (name, icon) VALUES (?, ?)", (new_cat, new_icon))
+                    conn.commit()
+                    st.success("הקטגוריה נוספה!")
+                    st.rerun()
+                except: st.error("הקטגוריה כבר קיימת")
+            
+            del_cat = c2.selectbox("בחר קטגוריה למחיקה:", df_cats['name'].tolist())
+            if c2.button("מחק קטגוריה"):
+                cursor.execute("DELETE FROM categories WHERE name = ?", (del_cat,))
+                conn.commit()
+                st.warning(f"הקטגוריה {del_cat} נמחקה")
+                st.rerun()
+
+    # תצוגת פריטים בתוך קטגוריה נבחרת
+    else:
+        cat_name = st.session_state.selected_category
+        st.subheader(f"ניהול פריטים בקטגוריית: {cat_name}")
+        
+        # הוספת פריט חדש לקטגוריה הזו
+        with st.expander(f"➕ הוספת פריט חדש ל-{cat_name}"):
+            with st.form("add_item"):
+                i_name = st.text_input("שם הפריט:")
+                i_cat_no = st.text_input("מספר קטלוגי:")
+                i_loc = st.text_input("מיקום:")
+                i_qty = st.number_input("כמות:", min_value=0, value=1)
+                i_exp = st.date_input("תאריך תפוגה:", value=None)
+                if st.form_submit_button("שמור פריט"):
+                    exp_s = i_exp.strftime('%Y-%m-%d') if i_exp else None
+                    cursor.execute("INSERT INTO inventory (item_name, category, location, quantity, expiry_date, catalog_number) VALUES (?,?,?,?,?,?)", 
+                                   (i_name, cat_name, i_loc, i_qty, exp_s, i_cat_no))
+                    conn.commit()
+                    st.success("הפריט נוסף בהצלחה!")
+                    st.rerun()
+
+        # הצגת רשימת הפריטים
+        df_items = pd.read_sql_query("SELECT * FROM inventory WHERE category = ?", conn, params=(cat_name,))
+        if df_items.empty:
+            st.info("אין עדיין פריטים בקטגוריה זו.")
+        else:
+            for _, item in df_items.iterrows():
+                with st.container():
+                    st.markdown(f"""
+                    <div class="item-card">
+                        <div style="display: flex; justify-content: space-between;">
+                            <b style="color: #2dd4bf; font-size: 1.2rem;">{item['item_name']}</b>
+                            <span>📍 {item['location']}</span>
+                        </div>
+                        <div style="font-size: 0.9rem; margin-top: 5px;">
+                            🔢 כמות: {item['quantity']} | 🔖 קטלוג: {item['catalog_number']} | 📅 תפוגה: {item['expiry_date']}
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    c1, c2, c3 = st.columns([1, 1, 2])
+                    new_q = c1.number_input("עדכן כמות:", min_value=0, value=int(item['quantity']), key=f"q_{item['id']}")
+                    if c2.button("עדכן", key=f"up_{item['id']}"):
+                        cursor.execute("UPDATE inventory SET quantity = ? WHERE id = ?", (new_q, item['id']))
+                        conn.commit()
+                        st.rerun()
+                    if c3.button("🗑️ מחק פריט", key=f"del_{item['id']}"):
+                        cursor.execute("DELETE FROM inventory WHERE id = ?", (item['id'],))
+                        conn.commit()
+                        st.rerun()
+
+with tab_dash:
+    st.subheader("📊 מצב המעבדה")
+    df_all = pd.read_sql_query("SELECT * FROM inventory", conn)
+    if not df_all.empty:
+        st.metric("סה\"כ פריטים במלאי", len(df_all))
+        st.bar_chart(df_all['category'].value_counts())
+    else: st.info("אין נתונים להצגה.")
