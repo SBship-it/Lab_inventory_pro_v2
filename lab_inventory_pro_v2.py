@@ -3,14 +3,14 @@ import pandas as pd
 import sqlite3
 from datetime import datetime
 
-# 1. הגדרות דף ועיצוב מותאם אישית (Custom CSS) - הגדרה נקייה ויציבה
+# 1. הגדרות דף ועיצוב מותאם אישית (Custom CSS) - החלפה מלאה לכפתורים אמיתיים וכהים
 st.set_page_config(page_title="LabInventory Pro", layout="wide", initial_sidebar_state="expanded")
 
 custom_css = """
 <style>
     .stApp { background-color: #0f172a; color: #f8fafc; }
     
-    /* תיקון צבע הטקסט בטאבים הלא-נבחרים והנבחרים */
+    /* תיקון צבע הטקסט בלשוניות (Tabs) */
     .stTabs [data-baseweb="tab"] p {
         color: #cbd5e1 !important;
     }
@@ -18,33 +18,44 @@ custom_css = """
         color: #0f172a !important;
         font-weight: bold !important;
     }
+    .stTabs [data-baseweb="tab-list"] { background-color: #1e293b; border-radius: 12px; padding: 5px; }
+    .stTabs [aria-selected="true"] { background-color: #2dd4bf !important; border-radius: 8px !important; }
 
-    /* כרטיסי קטגוריות יציבים ב-HTML - ללא תלות בכפתורי המערכת */
-    .category-box {
+    /* עיצוב ישיר של כפתורי המערכת של Streamlit - הופך אותם לריבועים הכהים! */
+    div[data-testid="stButton"] > button[key^="cat_btn_"] {
         background-color: #1e293b !important;
-        border: 2px solid #334155 !important;
-        border-radius: 12px !important;
-        padding: 25px 15px !important;
-        text-align: center !important;
-        min-height: 140px !important;
-        margin-bottom: 10px !important;
-        transition: all 0.3s ease;
-    }
-    .category-box:hover {
-        border-color: #2dd4bf !important;
-        box-shadow: 0 8px 16px rgba(45, 212, 191, 0.1);
-    }
-    .category-box-icon {
-        font-size: 2.5rem !important;
-        margin-bottom: 8px !important;
-    }
-    .category-box-title {
         color: #2dd4bf !important;
-        font-size: 1.2rem !important;
-        font-weight: bold !important;
+        border: 2px solid #334155 !important;
+        border-radius: 15px !important;
+        min-height: 160px !important;
+        width: 100% !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 15px !important;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1) !important;
+    }
+    
+    /* אפקט ריחוף על הכפתור הריבועי */
+    div[data-testid="stButton"] > button[key^="cat_btn_"]:hover {
+        border-color: #2dd4bf !important;
+        background-color: #243049 !important;
+        color: #5eead4 !important;
+        transform: translateY(-4px) !important;
+        box-shadow: 0 10px 20px rgba(45, 212, 191, 0.15) !important;
     }
 
-    /* כרטיסי פריטים בתוך קטגוריה */
+    /* תיקון פונט וגודל הטקסט בתוך כפתור המערכת המעוצב */
+    div[data-testid="stButton"] > button[key^="cat_btn_"] p {
+        color: #2dd4bf !important;
+        font-size: 1.4rem !important;
+        font-weight: bold !important;
+        margin: 0 !important;
+    }
+
+    /* כרטיסי פריטים (כשנכנסים לקטגוריה) */
     .item-card {
         background: #1e293b;
         border-radius: 12px;
@@ -53,20 +64,11 @@ custom_css = """
         margin-bottom: 15px;
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
     }
-    .item-card.expired {
-        border-right-color: #ef4444 !important;
-        background: #2d1e1e;
-    }
-    .item-card.warning {
-        border-right-color: #f59e0b !important;
-        background: #2d271e;
-    }
+    .item-card.expired { border-right-color: #ef4444 !important; background: #2d1e1e; }
+    .item-card.warning { border-right-color: #f59e0b !important; background: #2d271e; }
     
     label, .stMarkdown p { color: #cbd5e1 !important; }
     h1, h2, h3 { color: #2dd4bf !important; font-family: 'Segoe UI', sans-serif; }
-    
-    .stTabs [data-baseweb="tab-list"] { background-color: #1e293b; border-radius: 12px; padding: 5px; }
-    .stTabs [aria-selected="true"] { background-color: #2dd4bf !important; border-radius: 8px !important; }
 </style>
 """
 st.markdown(custom_css, unsafe_allow_html=True)
@@ -84,7 +86,7 @@ conn.commit()
 # הכנסת קטגוריות ברירת מחדל אם ריק
 cursor.execute("SELECT COUNT(*) FROM categories")
 if cursor.fetchone()[0] == 0:
-    defaults = [("נוגדנים (Antibodies)", "🧬"), ("כימיקלים (Chemicals)", "🧪"), ("מתכלים (Consumables)", "📦"), ("כללי", "🛠️")]
+    defaults = [("נוגדנים", "🧬"), ("כימיקלים", "🧪"), ("מתכלים", "📦"), ("כללי", "🛠️")]
     cursor.executemany("INSERT INTO categories (name, icon) VALUES (?, ?)", defaults)
     conn.commit()
 
@@ -105,25 +107,18 @@ with tab_manage:
             st.session_state.selected_category = None
             st.rerun()
 
-    # תצוגת קטגוריות (כרטיסי HTML יציבים עם כפתור כניסה ייעודי)
+    # תצוגת קטגוריות (ריבועים לחיצים אמיתיים ללא כפתור כפול מתחת)
     if st.session_state.selected_category is None:
         st.subheader("בחר קטגוריה לניהול המלאי:")
         
         df_cats = pd.read_sql_query("SELECT * FROM categories", conn)
-        cols = st.columns(3) # פריסה רחבה ויציבה של 3 עמודות
+        cols = st.columns(3) 
         
         for idx, row in df_cats.iterrows():
             with cols[idx % 3]:
-                # רינדור כרטיס ה-HTML (תמיד יישאר כהה, רחב וקבוע)
-                st.markdown(f"""
-                <div class="category-box">
-                    <div class="category-box-icon">{row['icon']}</div>
-                    <div class="category-box-title">{row['name']}</div>
-                </div>
-                """, unsafe_allow_html=True)
-                
-                # כפתור המערכת הסטנדרטי משמש רק ללחיצת הכניסה הברורה
-                if st.button(f"פתח את {row['name']} 🔍", key=f"cat_btn_{row['id']}", use_container_width=True):
+                # יצירת מחרוזת המשלבת אייקון וטקסט עם ירידת שורה, שתופיע בתוך כפתור המערכת המעוצב
+                button_content = f"{row['icon']}\n\n{row['name']}"
+                if st.button(button_content, key=f"cat_btn_{row['id']}", use_container_width=True):
                     st.session_state.selected_category = row['name']
                     st.rerun()
         
@@ -171,7 +166,7 @@ with tab_manage:
                     st.success("הפריט נוסף בהצלחה!")
                     st.rerun()
 
-        # הצגת רשימת הפריטים בקטגוריה המבוקשת
+        # הצגת רשימת הפריטים
         df_items = pd.read_sql_query("SELECT * FROM inventory WHERE category = ?", conn, params=(cat_name,))
         if df_items.empty:
             st.info("אין עדיין פריטים בקטגוריה זו. לחצי על הפלוס למעלה כדי להוסיף.")
@@ -181,7 +176,6 @@ with tab_manage:
                 card_class = "item-card"
                 expiry_status_text = ""
                 
-                # לוגיקת בדיקת תאריך תפוגה לצורך צביעת הכרטיס
                 if item['expiry_date'] and item['expiry_date'] != "אין תפוגה":
                     try:
                         exp_date = datetime.strptime(item['expiry_date'], '%Y-%m-%d')
@@ -195,7 +189,6 @@ with tab_manage:
                     except ValueError: 
                         pass
 
-                # רינדור כרטיס פריט
                 st.markdown(f"""
                 <div class="{card_class}">
                     <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -208,7 +201,6 @@ with tab_manage:
                 </div>
                 """, unsafe_allow_html=True)
                 
-                # שורת עדכון מהיר מתחת לכל כרטיס
                 c1, c2, c3 = st.columns([2, 1, 1])
                 new_q = c1.number_input("עדכון כמות מהיר:", min_value=0, value=int(item['quantity']), key=f"q_{item['id']}", label_visibility="collapsed")
                 
@@ -231,7 +223,6 @@ with tab_dash:
     if df_all.empty:
         st.info("אין עדיין נתונים במערכת כדי לייצר דאשבורד.")
     else:
-        # מטריקות מרכזיות
         m1, m2 = st.columns(2)
         m1.metric("סה\"כ פריטים שונים במערכת", len(df_all))
         m2.metric("סה\"כ יחידות מלאי כולל", int(df_all['quantity'].sum()))
@@ -240,7 +231,6 @@ with tab_dash:
         st.markdown("### 📦 התפלגות חומרים לפי קטגוריות")
         st.bar_chart(df_all['category'].value_counts())
         
-        # התראות תפוגה דחופות בדאשבורד
         st.markdown("### 🔔 התראות תפוגה דחופות (30 יום הקרובים)")
         today = datetime.today()
         alert_triggered = False
