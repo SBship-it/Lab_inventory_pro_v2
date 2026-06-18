@@ -1,38 +1,53 @@
 import streamlit as st
 import pandas as pd
 import sqlite3
-import hashlib
 from datetime import datetime
 
-# 1. הגדרות דף ועיצוב מותאם אישית משודרג
+# 1. הגדרות דף ועיצוב מותאם אישית (Custom CSS) - תיקון מלא לתצוגה
 st.set_page_config(page_title="LabInventory Pro", layout="wide", initial_sidebar_state="expanded")
 
 custom_css = """
 <style>
     .stApp { background-color: #0f172a; color: #f8fafc; }
     
-    /* עיצוב כפתורי הקטגוריות - הופך את כל הריבוע ללחיץ! */
-    .stButton > button[key^="cat_btn_"] {
+    /* תיקון צבע הטקסט בטאבים הלא-נבחרים כדי שיהיה קריא */
+    .stTabs [data-baseweb="tab"] p {
+        color: #cbd5e1 !important;
+    }
+    .stTabs [aria-selected="true"] p {
+        color: #0f172a !important;
+    }
+
+    /* עיצוב כפתורי הקטגוריות - ריבועים גדולים וכהים */
+    div.stButton > button[key^="cat_btn_"] {
         background-color: #1e293b !important;
+        color: #2dd4bf !important;
         border: 2px solid #334155 !important;
         border-radius: 15px !important;
-        padding: 30px !important;
-        height: 180px !important;
+        padding: 40px 20px !important;
+        min-height: 160px !important;
         width: 100% !important;
         transition: all 0.3s ease !important;
-        display: flex !important;
-        flex-direction: column !important;
-        align-items: center !important;
-        justify-content: center !important;
-    }
-    .stButton > button[key^="cat_btn_"]:hover {
-        border-color: #2dd4bf !important;
-        background-color: #1e293b !important;
-        transform: scale(1.03) !important;
-        box-shadow: 0 10px 20px rgba(45, 212, 191, 0.1) !important;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1) !important;
     }
     
-    /* כרטיסי פריטים משודרגים בתוך הקטגוריה */
+    /* אפקט ריחוף (Hover) מודרני */
+    div.stButton > button[key^="cat_btn_"]:hover {
+        border-color: #2dd4bf !important;
+        background-color: #1e293b !important;
+        color: #5eead4 !important;
+        transform: translateY(-4px) !important;
+        box-shadow: 0 10px 20px rgba(45, 212, 191, 0.15) !important;
+    }
+    
+    /* מניעת הפיכת הטקסט ללבן בכפתורי הקטגוריות */
+    div.stButton > button[key^="cat_btn_"] div p {
+        color: #2dd4bf !important;
+        font-size: 1.4rem !important;
+        font-weight: bold !important;
+    }
+
+    /* כרטיסי פריטים בתוך קטגוריה נבחרת */
     .item-card {
         background: #1e293b;
         border-radius: 12px;
@@ -59,7 +74,7 @@ custom_css = """
 """
 st.markdown(custom_css, unsafe_allow_html=True)
 
-# 2. בסיס נתונים
+# 2. חיבור לבסיס נתונים (SQLite)
 conn = sqlite3.connect("lab_storage_pro.db", check_same_thread=False)
 cursor = conn.cursor()
 
@@ -69,21 +84,23 @@ cursor.execute('''CREATE TABLE IF NOT EXISTS inventory (
     location TEXT, quantity INTEGER, expiry_date TEXT, catalog_number TEXT)''')
 conn.commit()
 
-# קטגוריות ברירת מחדל
+# הכנסת קטגוריות ברירת מחדל אם ריק
 cursor.execute("SELECT COUNT(*) FROM categories")
 if cursor.fetchone()[0] == 0:
     defaults = [("נוגדנים (Antibodies)", "🧬"), ("כימיקלים (Chemicals)", "🧪"), ("מתכלים (Consumables)", "📦"), ("כללי", "🛠️")]
     cursor.executemany("INSERT INTO categories (name, icon) VALUES (?, ?)", defaults)
     conn.commit()
 
-# 3. ניהול סשן לניווט
-if 'selected_category' not in st.session_state: st.session_state.selected_category = None
+# 3. ניהול סשן לניווט בין קטגוריות
+if 'selected_category' not in st.session_state: 
+    st.session_state.selected_category = None
 
 # --- ממשק ראשי ---
-st.title("🧪 LabInventory Pro")
+st.title("🧪 LabInventory Pro - ניהול חכם")
 
 tab_manage, tab_dash = st.tabs(["🛒 ניהול והזמנות", "📊 דאשבורד ומעקב תפוגה"])
 
+# ----------------- לשונית 1: ניהול והזמנות -----------------
 with tab_manage:
     # כפתור חזרה אם אנחנו בתוך קטגוריה
     if st.session_state.selected_category:
@@ -91,18 +108,17 @@ with tab_manage:
             st.session_state.selected_category = None
             st.rerun()
 
-    # תצוגת קטגוריות (ריבועים לחיצים אמיתיים)
+    # תצוגת קטגוריות (ריבועים גדולים ויציבים)
     if st.session_state.selected_category is None:
         st.subheader("בחר קטגוריה לניהול המלאי:")
         
         df_cats = pd.read_sql_query("SELECT * FROM categories", conn)
-        cols = st.columns(4) # פריסה רחבה יותר של 4 בעמודה
+        cols = st.columns(3) # חלוקה ל-3 עמודות רחבות למניעת התכווצות
         
         for idx, row in df_cats.iterrows():
-            with cols[idx % 4]:
-                # יצירת הכפתור הריבועי באמצעות טריק של כתיבת האייקון והטקסט בתוך הכפתור
-                button_label = f"{row['icon']}\n\n{row['name']}"
-                if st.button(button_label, key=f"cat_btn_{row['id']}", use_container_width=True):
+            with cols[idx % 3]:
+                display_text = f"{row['icon']}  {row['name']}"
+                if st.button(display_text, key=f"cat_btn_{row['id']}", use_container_width=True):
                     st.session_state.selected_category = row['name']
                     st.rerun()
         
@@ -118,7 +134,8 @@ with tab_manage:
                         conn.commit()
                         st.success("הקטגוריה נוספה!")
                         st.rerun()
-                    except: st.error("הקטגוריה כבר קיימת")
+                    except: 
+                        st.error("הקטגוריה כבר קיימת")
             
             del_cat = c2.selectbox("בחר קטגוריה למחיקה:", df_cats['name'].tolist())
             if c2.button("🗑️ מחק קטגוריה", use_container_width=True):
@@ -149,17 +166,17 @@ with tab_manage:
                     st.success("הפריט נוסף בהצלחה!")
                     st.rerun()
 
-        # הצגת רשימת הפריטים
+        # הצגת רשימת הפריטים בקטגוריה המבוקשת
         df_items = pd.read_sql_query("SELECT * FROM inventory WHERE category = ?", conn, params=(cat_name,))
         if df_items.empty:
             st.info("אין עדיין פריטים בקטגוריה זו. לחצי על הפלוס למעלה כדי להוסיף.")
         else:
             today = datetime.today()
             for _, item in df_items.iterrows():
-                # בדיקת סטטוס תפוגה לצורך צביעת הכרטיס
                 card_class = "item-card"
                 expiry_status_text = ""
                 
+                # לוגיקת בדיקת תאריך תפוגה לצורך צביעת הכרטיס
                 if item['expiry_date'] and item['expiry_date'] != "אין תפוגה":
                     try:
                         exp_date = datetime.strptime(item['expiry_date'], '%Y-%m-%d')
@@ -170,9 +187,10 @@ with tab_manage:
                         elif days_to_expire <= 30:
                             card_class = "item-card warning"
                             expiry_status_text = f"⚠️ עומד לפוג (בעוד {days_to_expire} ימים)"
-                    except ValueError: pass
+                    except ValueError: 
+                        pass
 
-                # כרטיס פריט מעוצב
+                # רינדור כרטיס פריט
                 st.markdown(f"""
                 <div class="{card_class}">
                     <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -185,7 +203,7 @@ with tab_manage:
                 </div>
                 """, unsafe_allow_html=True)
                 
-                # שורת פעולות מהירות מתחת לכל כרטיס
+                # שורת עדכון מהיר מתחת לכל כרטיס
                 c1, c2, c3 = st.columns([2, 1, 1])
                 new_q = c1.number_input("עדכון כמות מהיר:", min_value=0, value=int(item['quantity']), key=f"q_{item['id']}", label_visibility="collapsed")
                 
@@ -217,7 +235,7 @@ with tab_dash:
         st.markdown("### 📦 התפלגות חומרים לפי קטגוריות")
         st.bar_chart(df_all['category'].value_counts())
         
-        # התראות תפוגה אוטומטיות בדאשבורד
+        # התראות תפוגה דחופות בדאשבורד
         st.markdown("### 🔔 התראות תפוגה דחופות (30 יום הקרובים)")
         today = datetime.today()
         alert_triggered = False
@@ -233,7 +251,8 @@ with tab_dash:
                     elif days_to_expire <= 30:
                         st.warning(f"⚠️ **{row['item_name']}** (קטלוג: {row['catalog_number']}) נמצא ב- {row['location']} ו**יפוג בעוד {days_to_expire} ימים**.")
                         alert_triggered = True
-                except ValueError: pass
+                except ValueError: 
+                    pass
                 
         if not alert_triggered:
-            st.success("✅ כל הכבוד! אין חומרים פגי תוקף או קרובים לתפוגה במעבדה.")
+            st.success("✅ אין חומרים פגי תוקף או קרובים לתפוגה במעבדה.")
