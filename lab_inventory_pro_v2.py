@@ -3,50 +3,62 @@ import pandas as pd
 import sqlite3
 from datetime import datetime
 
-# 1. הגדרות דף ועיצוב מותאם אישית (Custom CSS)
+# 1. הגדרות דף ועיצוב מותאם אישית (Custom CSS) - הגדרה אגרסיבית לכל מצבי הכפתור
 st.set_page_config(page_title="LabInventory Pro", layout="wide", initial_sidebar_state="expanded")
 
 custom_css = """
 <style>
+    /* רקע כללי של האפליקציה */
     .stApp { background-color: #0f172a; color: #f8fafc; }
     
-    /* תיקון צבע הטקסט בלשוניות (Tabs) */
-    .stTabs [data-baseweb="tab"] p {
-        color: #cbd5e1 !important;
-    }
-    .stTabs [aria-selected="true"] p {
-        color: #0f172a !important;
-        font-weight: bold !important;
-    }
+    /* עיצוב הלשוניות (Tabs) */
+    .stTabs [data-baseweb="tab"] p { color: #cbd5e1 !important; font-size: 1.1rem; }
+    .stTabs [aria-selected="true"] p { color: #0f172a !important; font-weight: bold !important; }
     .stTabs [data-baseweb="tab-list"] { background-color: #1e293b; border-radius: 12px; padding: 5px; }
     .stTabs [aria-selected="true"] { background-color: #2dd4bf !important; border-radius: 8px !important; }
 
-    /* הלבשת עיצוב בכוח על כפתורי הקטגוריות - דריסת המצב הלבן הדיפולטי */
-    div[data-testid="stButton"] > button[key^="cat_btn_"],
-    div[data-testid="stButton"] > button[key^="cat_btn_"]:focus,
-    div[data-testid="stButton"] > button[key^="cat_btn_"]:active,
-    div[data-testid="stButton"] > button[key^="cat_btn_"]:hover {
+    /* דריסה מוחלטת של כפתורי המערכת - הפיכתם לכרטיסים כהים וגדולים */
+    div[data-testid="stButton"] > button {
         background-color: #1e293b !important;
+        color: #2dd4bf !important;
         border: 2px solid #334155 !important;
         border-radius: 15px !important;
-        min-height: 160px !important;
+        min-height: 140px !important;
         width: 100% !important;
-        padding: 10px !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
+        padding: 20px !important;
+        font-size: 1.4rem !important;
+        font-weight: bold !important;
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1) !important;
-        transition: all 0.3s ease !important;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
     }
     
-    /* אפקט ריחוף עדין */
-    div[data-testid="stButton"] > button[key^="cat_btn_"]:hover {
+    /* מניעת הפיכת הכפתור ללבן במצב פוקוס, לחיצה או מצב פעיל */
+    div[data-testid="stButton"] > button:focus,
+    div[data-testid="stButton"] > button:active,
+    div[data-testid="stButton"] > button:focus-visible,
+    div[data-testid="stButton"] > button:focus-within {
+        background-color: #1e293b !important;
+        color: #2dd4bf !important;
+        border-color: #334155 !important;
+    }
+    
+    /* אפקט מעבר עכבר (Hover) - הופך את הטורקיז לזוהר יותר והמסגרת נצבעת */
+    div[data-testid="stButton"] > button:hover {
         border-color: #2dd4bf !important;
         background-color: #243049 !important;
+        color: #5eead4 !important;
         transform: translateY(-4px) !important;
+        box-shadow: 0 10px 20px rgba(45, 212, 191, 0.15) !important;
     }
 
-    /* כרטיסי פריטים (כשנכנסים לקטגוריה) */
+    /* תיקון צבע המלל של ה-Paragraph הפנימי ש-Streamlit יוצר לפעמים */
+    div[data-testid="stButton"] > button p {
+        color: #2dd4bf !important;
+        font-size: 1.4rem !important;
+        font-weight: bold !important;
+    }
+
+    /* כרטיסי פריטים בתוך הקטגוריות */
     .item-card {
         background: #1e293b;
         border-radius: 12px;
@@ -81,7 +93,7 @@ if cursor.fetchone()[0] == 0:
     cursor.executemany("INSERT INTO categories (name, icon) VALUES (?, ?)", defaults)
     conn.commit()
 
-# 3. ניהול סשן לניווט בין קטגוריות
+# 3. ניהול סשן לניווט
 if 'selected_category' not in st.session_state: 
     st.session_state.selected_category = None
 
@@ -94,11 +106,19 @@ tab_manage, tab_dash = st.tabs(["🛒 ניהול והזמנות", "📊 דאשב
 with tab_manage:
     # כפתור חזרה אם אנחנו בתוך קטגוריה
     if st.session_state.selected_category:
+        # עיצבנו את כפתור החזרה שייראה קטן יותר בצד ולא ריבוע ענק
+        st.markdown("""
+        <style>
+            div[data-testid="stSidebarCollapse"] + div div[data-testid="stButton"] > button {
+                min-height: auto !important; padding: 10px 20px !important; font-size: 1rem !important; width: auto !important;
+            }
+        </style>
+        """, unsafe_allow_html=True)
         if st.button("⬅️ חזרה לכל הקטגוריות"):
             st.session_state.selected_category = None
             st.rerun()
 
-    # תצוגת קטגוריות (שימוש ב-HTML מוזרק לתוך כפתור המערכת למניעת באגים)
+    # תצוגת קטגוריות
     if st.session_state.selected_category is None:
         st.subheader("בחר קטגוריה לניהול המלאי:")
         
@@ -107,15 +127,9 @@ with tab_manage:
         
         for idx, row in df_cats.iterrows():
             with cols[idx % 3]:
-                # יצירת ה-HTML הפנימי שמגן על עיצוב הטקסט והאייקון ומכריח אותם להישאר צבעוניים
-                html_button_content = f"""
-                <div style="text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%;">
-                    <span style="font-size: 2.5rem; display: block; margin-bottom: 10px;">{row['icon']}</span>
-                    <span style="color: #2dd4bf; font-size: 1.3rem; font-weight: bold; font-family: sans-serif; white-space: nowrap;">{row['name']}</span>
-                </div>
-                """
-                # החלפת הלייבל הפשוט בתוכן המוגן בתוך ה-button
-                if st.button(html_button_content, key=f"cat_btn_{row['id']}", use_container_width=True):
+                # שימוש בטקסט נקי לחלוטין - ה-CSS דואג להפוך את זה לכרטיס רחב ומעוצב
+                button_text = f"{row['icon']}  {row['name']}"
+                if st.button(button_text, key=f"cat_btn_{row['id']}", use_container_width=True):
                     st.session_state.selected_category = row['name']
                     st.rerun()
         
