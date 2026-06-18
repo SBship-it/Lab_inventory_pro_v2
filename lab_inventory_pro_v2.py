@@ -147,12 +147,13 @@ cursor.execute('CREATE TABLE IF NOT EXISTS users (username TEXT PRIMARY KEY, pas
 conn.commit()
 
 # יצירת משתמש מנהל ברירת מחדל לבדיקה (שם משתמש: admin, סיסמה: lab2026)
-try:
+# יצירת משתמש מנהל ברירת מחדל אם הוא לא קיים
+cursor.execute('SELECT * FROM users WHERE username = ?', ("admin",))
+if not cursor.fetchone():
     cursor.execute('INSERT INTO users (username, password, account_status) VALUES (?, ?, ?)', 
                    ("admin", make_hashes("lab2026"), "active"))
     conn.commit()
-except sqlite3.IntegrityError:
-    pass
+
 
 # 4. מנגנון ניהול סשן (Session State)
 if 'logged_in' not in st.session_state:
