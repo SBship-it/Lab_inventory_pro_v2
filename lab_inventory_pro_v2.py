@@ -3,7 +3,7 @@ import pandas as pd
 import sqlite3
 from datetime import datetime
 
-# 1. הגדרות דף ועיצוב מותאם אישית (Custom CSS) - החלפה מלאה לכפתורים אמיתיים וכהים
+# 1. הגדרות דף ועיצוב מותאם אישית (Custom CSS) - הגנה מלאה על צבע הכפתורים
 st.set_page_config(page_title="LabInventory Pro", layout="wide", initial_sidebar_state="expanded")
 
 custom_css = """
@@ -21,8 +21,10 @@ custom_css = """
     .stTabs [data-baseweb="tab-list"] { background-color: #1e293b; border-radius: 12px; padding: 5px; }
     .stTabs [aria-selected="true"] { background-color: #2dd4bf !important; border-radius: 8px !important; }
 
-    /* עיצוב ישיר של כפתורי המערכת של Streamlit - הופך אותם לריבועים הכהים! */
-    div[data-testid="stButton"] > button[key^="cat_btn_"] {
+    /* עיצוב אגרסיבי לכפתורי המלאי - מבטיח רקע כהה בכל המצבים */
+    div[data-testid="stButton"] > button[key^="cat_btn_"],
+    div[data-testid="stButton"] > button[key^="cat_btn_"]:focus,
+    div[data-testid="stButton"] > button[key^="cat_btn_"]:active {
         background-color: #1e293b !important;
         color: #2dd4bf !important;
         border: 2px solid #334155 !important;
@@ -34,11 +36,11 @@ custom_css = """
         align-items: center !important;
         justify-content: center !important;
         gap: 15px !important;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        transition: all 0.3s ease !important;
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1) !important;
     }
     
-    /* אפקט ריחוף על הכפתור הריבועי */
+    /* אפקט ריחוף בלבד (כשכן עומדים עם העכבר) */
     div[data-testid="stButton"] > button[key^="cat_btn_"]:hover {
         border-color: #2dd4bf !important;
         background-color: #243049 !important;
@@ -47,8 +49,10 @@ custom_css = """
         box-shadow: 0 10px 20px rgba(45, 212, 191, 0.15) !important;
     }
 
-    /* תיקון פונט וגודל הטקסט בתוך כפתור המערכת המעוצב */
-    div[data-testid="stButton"] > button[key^="cat_btn_"] p {
+    /* קיבוע צבע, גודל ומשקל המלל בתוך הכפתור לכל המצבים */
+    div[data-testid="stButton"] > button[key^="cat_btn_"] p,
+    div[data-testid="stButton"] > button[key^="cat_btn_"]:focus p,
+    div[data-testid="stButton"] > button[key^="cat_btn_"]:active p {
         color: #2dd4bf !important;
         font-size: 1.4rem !important;
         font-weight: bold !important;
@@ -107,7 +111,7 @@ with tab_manage:
             st.session_state.selected_category = None
             st.rerun()
 
-    # תצוגת קטגוריות (ריבועים לחיצים אמיתיים ללא כפתור כפול מתחת)
+    # תצוגת קטגוריות (כפתורים ריבועיים אמיתיים ויציבים לחלוטין)
     if st.session_state.selected_category is None:
         st.subheader("בחר קטגוריה לניהול המלאי:")
         
@@ -116,7 +120,6 @@ with tab_manage:
         
         for idx, row in df_cats.iterrows():
             with cols[idx % 3]:
-                # יצירת מחרוזת המשלבת אייקון וטקסט עם ירידת שורה, שתופיע בתוך כפתור המערכת המעוצב
                 button_content = f"{row['icon']}\n\n{row['name']}"
                 if st.button(button_content, key=f"cat_btn_{row['id']}", use_container_width=True):
                     st.session_state.selected_category = row['name']
