@@ -3,7 +3,7 @@ import pandas as pd
 import sqlite3
 from datetime import datetime
 
-# 1. הגדרות דף ועיצוב מותאם אישית (Custom CSS) - הגנה מלאה על צבע הכפתורים
+# 1. הגדרות דף ועיצוב מותאם אישית (Custom CSS)
 st.set_page_config(page_title="LabInventory Pro", layout="wide", initial_sidebar_state="expanded")
 
 custom_css = """
@@ -21,42 +21,29 @@ custom_css = """
     .stTabs [data-baseweb="tab-list"] { background-color: #1e293b; border-radius: 12px; padding: 5px; }
     .stTabs [aria-selected="true"] { background-color: #2dd4bf !important; border-radius: 8px !important; }
 
-    /* עיצוב אגרסיבי לכפתורי המלאי - מבטיח רקע כהה בכל המצבים */
+    /* הלבשת עיצוב בכוח על כפתורי הקטגוריות - דריסת המצב הלבן הדיפולטי */
     div[data-testid="stButton"] > button[key^="cat_btn_"],
     div[data-testid="stButton"] > button[key^="cat_btn_"]:focus,
-    div[data-testid="stButton"] > button[key^="cat_btn_"]:active {
+    div[data-testid="stButton"] > button[key^="cat_btn_"]:active,
+    div[data-testid="stButton"] > button[key^="cat_btn_"]:hover {
         background-color: #1e293b !important;
-        color: #2dd4bf !important;
         border: 2px solid #334155 !important;
         border-radius: 15px !important;
         min-height: 160px !important;
         width: 100% !important;
+        padding: 10px !important;
         display: flex !important;
-        flex-direction: column !important;
         align-items: center !important;
         justify-content: center !important;
-        gap: 15px !important;
-        transition: all 0.3s ease !important;
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1) !important;
+        transition: all 0.3s ease !important;
     }
     
-    /* אפקט ריחוף בלבד (כשכן עומדים עם העכבר) */
+    /* אפקט ריחוף עדין */
     div[data-testid="stButton"] > button[key^="cat_btn_"]:hover {
         border-color: #2dd4bf !important;
         background-color: #243049 !important;
-        color: #5eead4 !important;
         transform: translateY(-4px) !important;
-        box-shadow: 0 10px 20px rgba(45, 212, 191, 0.15) !important;
-    }
-
-    /* קיבוע צבע, גודל ומשקל המלל בתוך הכפתור לכל המצבים */
-    div[data-testid="stButton"] > button[key^="cat_btn_"] p,
-    div[data-testid="stButton"] > button[key^="cat_btn_"]:focus p,
-    div[data-testid="stButton"] > button[key^="cat_btn_"]:active p {
-        color: #2dd4bf !important;
-        font-size: 1.4rem !important;
-        font-weight: bold !important;
-        margin: 0 !important;
     }
 
     /* כרטיסי פריטים (כשנכנסים לקטגוריה) */
@@ -111,7 +98,7 @@ with tab_manage:
             st.session_state.selected_category = None
             st.rerun()
 
-    # תצוגת קטגוריות (כפתורים ריבועיים אמיתיים ויציבים לחלוטין)
+    # תצוגת קטגוריות (שימוש ב-HTML מוזרק לתוך כפתור המערכת למניעת באגים)
     if st.session_state.selected_category is None:
         st.subheader("בחר קטגוריה לניהול המלאי:")
         
@@ -120,8 +107,15 @@ with tab_manage:
         
         for idx, row in df_cats.iterrows():
             with cols[idx % 3]:
-                button_content = f"{row['icon']}\n\n{row['name']}"
-                if st.button(button_content, key=f"cat_btn_{row['id']}", use_container_width=True):
+                # יצירת ה-HTML הפנימי שמגן על עיצוב הטקסט והאייקון ומכריח אותם להישאר צבעוניים
+                html_button_content = f"""
+                <div style="text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%;">
+                    <span style="font-size: 2.5rem; display: block; margin-bottom: 10px;">{row['icon']}</span>
+                    <span style="color: #2dd4bf; font-size: 1.3rem; font-weight: bold; font-family: sans-serif; white-space: nowrap;">{row['name']}</span>
+                </div>
+                """
+                # החלפת הלייבל הפשוט בתוכן המוגן בתוך ה-button
+                if st.button(html_button_content, key=f"cat_btn_{row['id']}", use_container_width=True):
                     st.session_state.selected_category = row['name']
                     st.rerun()
         
