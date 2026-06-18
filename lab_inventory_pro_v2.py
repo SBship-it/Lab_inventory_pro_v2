@@ -109,10 +109,25 @@ cursor = conn.cursor()
 cursor.execute("PRAGMA table_info(inventory)")
 columns = [col[1] for col in cursor.fetchall()]
 
-if 'min_quantity' not in columns:
-    cursor.execute("ALTER TABLE inventory ADD COLUMN min_quantity INTEGER DEFAULT 1")
-if 'expiry_date' not in columns:
-    cursor.execute("ALTER TABLE inventory ADD COLUMN expiry_date TEXT")
+# יצירת טבלאות (מלאי, הזמנות, משתמשים)
+cursor.execute('''
+    CREATE TABLE IF NOT EXISTS inventory (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        item_name TEXT, catalog_number TEXT, vendor TEXT,
+        category TEXT, location TEXT, quantity INTEGER, unit TEXT, 
+        min_quantity INTEGER DEFAULT 1, expiry_date TEXT
+    )
+''')
+cursor.execute('''
+    CREATE TABLE IF NOT EXISTS orders (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        item_name TEXT, catalog_number TEXT, vendor TEXT,
+        requested_by TEXT, quantity INTEGER, status TEXT, date_requested TEXT
+    )
+''')
+cursor.execute('CREATE TABLE IF NOT EXISTS users (username TEXT PRIMARY KEY, password TEXT, account_status TEXT)')
+conn.commit()
+
 
 cursor.execute('''
     CREATE TABLE IF NOT EXISTS inventory (
