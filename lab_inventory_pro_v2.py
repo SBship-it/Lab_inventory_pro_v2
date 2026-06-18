@@ -3,51 +3,48 @@ import pandas as pd
 import sqlite3
 from datetime import datetime
 
-# 1. הגדרות דף ועיצוב מותאם אישית (Custom CSS) - תיקון מלא לתצוגה
+# 1. הגדרות דף ועיצוב מותאם אישית (Custom CSS) - הגדרה נקייה ויציבה
 st.set_page_config(page_title="LabInventory Pro", layout="wide", initial_sidebar_state="expanded")
 
 custom_css = """
 <style>
     .stApp { background-color: #0f172a; color: #f8fafc; }
     
-    /* תיקון צבע הטקסט בטאבים הלא-נבחרים כדי שיהיה קריא */
+    /* תיקון צבע הטקסט בטאבים הלא-נבחרים והנבחרים */
     .stTabs [data-baseweb="tab"] p {
         color: #cbd5e1 !important;
     }
     .stTabs [aria-selected="true"] p {
         color: #0f172a !important;
-    }
-
-    /* עיצוב כפתורי הקטגוריות - ריבועים גדולים וכהים */
-    div.stButton > button[key^="cat_btn_"] {
-        background-color: #1e293b !important;
-        color: #2dd4bf !important;
-        border: 2px solid #334155 !important;
-        border-radius: 15px !important;
-        padding: 40px 20px !important;
-        min-height: 160px !important;
-        width: 100% !important;
-        transition: all 0.3s ease !important;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1) !important;
-    }
-    
-    /* אפקט ריחוף (Hover) מודרני */
-    div.stButton > button[key^="cat_btn_"]:hover {
-        border-color: #2dd4bf !important;
-        background-color: #1e293b !important;
-        color: #5eead4 !important;
-        transform: translateY(-4px) !important;
-        box-shadow: 0 10px 20px rgba(45, 212, 191, 0.15) !important;
-    }
-    
-    /* מניעת הפיכת הטקסט ללבן בכפתורי הקטגוריות */
-    div.stButton > button[key^="cat_btn_"] div p {
-        color: #2dd4bf !important;
-        font-size: 1.4rem !important;
         font-weight: bold !important;
     }
 
-    /* כרטיסי פריטים בתוך קטגוריה נבחרת */
+    /* כרטיסי קטגוריות יציבים ב-HTML - ללא תלות בכפתורי המערכת */
+    .category-box {
+        background-color: #1e293b !important;
+        border: 2px solid #334155 !important;
+        border-radius: 12px !important;
+        padding: 25px 15px !important;
+        text-align: center !important;
+        min-height: 140px !important;
+        margin-bottom: 10px !important;
+        transition: all 0.3s ease;
+    }
+    .category-box:hover {
+        border-color: #2dd4bf !important;
+        box-shadow: 0 8px 16px rgba(45, 212, 191, 0.1);
+    }
+    .category-box-icon {
+        font-size: 2.5rem !important;
+        margin-bottom: 8px !important;
+    }
+    .category-box-title {
+        color: #2dd4bf !important;
+        font-size: 1.2rem !important;
+        font-weight: bold !important;
+    }
+
+    /* כרטיסי פריטים בתוך קטגוריה */
     .item-card {
         background: #1e293b;
         border-radius: 12px;
@@ -69,7 +66,7 @@ custom_css = """
     h1, h2, h3 { color: #2dd4bf !important; font-family: 'Segoe UI', sans-serif; }
     
     .stTabs [data-baseweb="tab-list"] { background-color: #1e293b; border-radius: 12px; padding: 5px; }
-    .stTabs [aria-selected="true"] { background-color: #2dd4bf !important; color: #0f172a !important; font-weight: bold; }
+    .stTabs [aria-selected="true"] { background-color: #2dd4bf !important; border-radius: 8px !important; }
 </style>
 """
 st.markdown(custom_css, unsafe_allow_html=True)
@@ -108,17 +105,25 @@ with tab_manage:
             st.session_state.selected_category = None
             st.rerun()
 
-    # תצוגת קטגוריות (ריבועים גדולים ויציבים)
+    # תצוגת קטגוריות (כרטיסי HTML יציבים עם כפתור כניסה ייעודי)
     if st.session_state.selected_category is None:
         st.subheader("בחר קטגוריה לניהול המלאי:")
         
         df_cats = pd.read_sql_query("SELECT * FROM categories", conn)
-        cols = st.columns(3) # חלוקה ל-3 עמודות רחבות למניעת התכווצות
+        cols = st.columns(3) # פריסה רחבה ויציבה של 3 עמודות
         
         for idx, row in df_cats.iterrows():
             with cols[idx % 3]:
-                display_text = f"{row['icon']}  {row['name']}"
-                if st.button(display_text, key=f"cat_btn_{row['id']}", use_container_width=True):
+                # רינדור כרטיס ה-HTML (תמיד יישאר כהה, רחב וקבוע)
+                st.markdown(f"""
+                <div class="category-box">
+                    <div class="category-box-icon">{row['icon']}</div>
+                    <div class="category-box-title">{row['name']}</div>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                # כפתור המערכת הסטנדרטי משמש רק ללחיצת הכניסה הברורה
+                if st.button(f"פתח את {row['name']} 🔍", key=f"cat_btn_{row['id']}", use_container_width=True):
                     st.session_state.selected_category = row['name']
                     st.rerun()
         
